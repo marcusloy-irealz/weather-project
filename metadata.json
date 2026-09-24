@@ -1,0 +1,6 @@
+{
+  "name": "Singapore Weather & 2-Hour Forecast Map",
+  "description": "Live 2-hour Singapore weather forecast overlayed on an interactive map with area search and real-time NEA updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
