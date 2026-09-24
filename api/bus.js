@@ -1,12 +1,10 @@
 /**
- * Combined Singapore Live Transit & Weather API Handler
+ * Singapore Live 2-Hour Weather Forecast API Handler
  * Compatible with Vercel Serverless Functions and Express route handlers.
  * 
- * Supports:
- * 1. Weather Forecast: Accepts 'Area' query parameter (defaults to "Ang Mo Kioh")
- *    Calls https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast
- * 2. LTA Bus Arrival: Accepts 'BusStopCode' query parameter (e.g. 04121)
- *    Calls https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival
+ * Accepts: 'Area' query parameter (defaults to "Ang Mo Kioh")
+ * Calls: https://api-open.data.gov.sg/v2/real-time/api/two-hr-forecast
+ * Returns: Real-time NEA weather forecast overlaid on Singapore map sectors
  */
 
 const FALLBACK_WEATHER_DATA = {
@@ -148,7 +146,23 @@ function findMatchingArea(queryArea, metadataList, forecastsList) {
   };
 }
 
-async function handleWeatherRequest(req, res, requestedArea) {
+export default async function handler(req, res) {
+  const query = req.query || {};
+
+  // Accepts Area query parameter, defaults to "Ang Mo Kioh"
+  let requestedArea = query.Area || query.area;
+  if (!requestedArea && req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      requestedArea = parsedUrl.searchParams.get('Area') || parsedUrl.searchParams.get('area');
+    } catch (_) {}
+  }
+  if (!requestedArea || typeof requestedArea !== 'string' || requestedArea.trim() === '') {
+    requestedArea = "Ang Mo Kioh";
+  } else {
+    requestedArea = requestedArea.trim();
+  }
+
   let weatherPayload = null;
   let source = "live_api";
 
@@ -172,7 +186,7 @@ async function handleWeatherRequest(req, res, requestedArea) {
       }
     }
   } catch (_err) {
-    // Graceful fallback to snapshot
+    // Graceful fallback to cached snapshot
   }
 
   if (!weatherPayload) {
@@ -200,12 +214,12 @@ async function handleWeatherRequest(req, res, requestedArea) {
     update_timestamp: item.update_timestamp || item.timestamp,
     source,
     transit_info: {
-      interchange: `${matched.metadata.name} Central Transit Hub`,
+      interchange: `${matched.metadata.name} Town Center`,
       rain_shelter_available: true,
       service_status: "Normal",
       commute_advice: matched.forecast.forecast.toLowerCase().includes("shower") || matched.forecast.forecast.toLowerCase().includes("rain")
-        ? "Wet weather expected. Allow +10 mins travel time and carry an umbrella."
-        : "Favorable conditions for commuting across bus and train lines."
+        ? "Wet weather expected. Carry an umbrella and expect slippery pathways."
+        : "Pleasant outdoor and travel conditions across the sector."
     },
     data: weatherPayload.data,
     errorMsg: ""
@@ -213,6 +227,7 @@ async function handleWeatherRequest(req, res, requestedArea) {
 
   res.setHeader?.("Access-Control-Allow-Origin", "*");
   res.setHeader?.("Content-Type", "application/json");
+  res.setHeader?.("Cache-Control", "s-maxage=60, stale-while-revalidate=120");
 
   if (res.status && typeof res.status === "function") {
     res.status(200).json(responseJson);
@@ -220,111 +235,4 @@ async function handleWeatherRequest(req, res, requestedArea) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(responseJson));
   }
-}
-
-async function handleLtaBusRequest(req, res, busStopCode) {
-  const key = process.env.LTA_ACCOUNT_KEY;
-
-  // If no LTA key is set:
-  if (!key || typeof key !== 'string' || key.trim() === '') {
-    // Return 503 as required by LTA specification
-    res.status(503).json({
-      error: "LTA_ACCOUNT_KEY is not set. Add it in Vercel and redeploy.",
-      isDemoAvailable: true,
-      sampleServices: [
-        { ServiceNo: "7", nextBuses: [2, 12], minutes: [2, 12], nextBus: 2, nextBus2: 12 },
-        { ServiceNo: "14", nextBuses: [5, 18], minutes: [5, 18], nextBus: 5, nextBus2: 18 },
-        { ServiceNo: "16", nextBuses: [0, 9], minutes: [0, 9], nextBus: 0, nextBus2: 9 },
-        { ServiceNo: "124", nextBuses: [8], minutes: [8], nextBus: 8 },
-        { ServiceNo: "174", nextBuses: [14, 25], minutes: [14, 25], nextBus: 14, nextBus2: 25 },
-      ]
-    });
-    return;
-  }
-
-  const endpoint = `https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=${encodeURIComponent(busStopCode)}`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        AccountKey: key.trim(),
-        accept: 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      res.status(response.status).json({
-        error: `Upstream LTA service returned status ${response.status} (${response.statusText || 'Error'})`,
-      });
-      return;
-    }
-
-    const data = await response.json();
-    res.setHeader?.('Cache-Control', 's-maxage=20, stale-while-revalidate=40');
-
-    const services = Array.isArray(data?.Services) ? data.Services : [];
-    const now = Date.now();
-
-    const simplifiedList = services.map((service) => {
-      const nextBuses = [];
-      const busCandidates = [service?.NextBus, service?.NextBus2];
-
-      for (const bus of busCandidates) {
-        if (bus && typeof bus.EstimatedArrival === 'string') {
-          const rawEta = bus.EstimatedArrival.trim();
-          if (rawEta !== '') {
-            const arrivalTime = new Date(rawEta).getTime();
-            if (!isNaN(arrivalTime)) {
-              const diffMs = arrivalTime - now;
-              const minutes = Math.max(0, Math.floor(diffMs / 60000));
-              if (Number.isFinite(minutes) && !isNaN(minutes)) {
-                nextBuses.push(minutes);
-              }
-            }
-          }
-        }
-      }
-
-      const item = {
-        ServiceNo: String(service?.ServiceNo || ''),
-        nextBuses: nextBuses,
-        minutes: nextBuses,
-      };
-
-      if (nextBuses.length > 0) item.nextBus = nextBuses[0];
-      if (nextBuses.length > 1) item.nextBus2 = nextBuses[1];
-
-      return item;
-    });
-
-    res.status(200).json(simplifiedList);
-  } catch (_err) {
-    res.status(502).json({
-      error: 'Failed to connect to upstream LTA DataMall service.',
-    });
-  }
-}
-
-export default async function handler(req, res) {
-  const query = req.query || {};
-
-  // Check if this is an LTA bus stop request
-  let busStopCode = query.BusStopCode || query.busStopCode;
-  if (!busStopCode && req.url && (req.url.includes('BusStopCode') || req.url.includes('busStopCode'))) {
-    try {
-      const parsedUrl = new URL(req.url, 'http://localhost');
-      busStopCode = parsedUrl.searchParams.get('BusStopCode') || parsedUrl.searchParams.get('busStopCode');
-    } catch (_) {}
-  }
-
-  // If BusStopCode is explicitly provided, serve LTA Bus Arrivals
-  if (busStopCode) {
-    return handleLtaBusRequest(req, res, String(busStopCode).trim());
-  }
-
-  // Otherwise, serve Singapore 2-Hour Weather Forecast
-  // Defaults to "Ang Mo Kioh"
-  const requestedArea = (query.Area || query.area || "Ang Mo Kioh").toString();
-  return handleWeatherRequest(req, res, requestedArea);
 }

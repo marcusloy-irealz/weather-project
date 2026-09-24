@@ -9,20 +9,13 @@ import { SingaporeMap } from './components/SingaporeMap';
 import { WeatherDetailCard } from './components/WeatherDetailCard';
 import { AreaForecastGrid } from './components/AreaForecastGrid';
 import { ApiInspectorModal } from './components/ApiInspectorModal';
-import { BusArrivalPanel } from './components/BusArrivalPanel';
-import { WeatherApiResponse, AreaMetadata, AreaForecast, HealthApiResponse } from './types/weather';
+import { WeatherApiResponse, AreaMetadata, AreaForecast } from './types/weather';
 import {
   AlertCircle,
   CloudRain,
   MapPin,
-  Sparkles,
-  Terminal,
   ShieldCheck,
-  Bus,
-  CloudSun,
-  LayoutGrid,
   CheckCircle2,
-  XCircle,
   RefreshCw,
   Info
 } from 'lucide-react';
@@ -33,7 +26,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'weather_map' | 'bus_arrivals' | 'combined'>('combined');
 
   // Health / Diagnostics Modal
   const [showHealthModal, setShowHealthModal] = useState<boolean>(false);
@@ -101,8 +93,7 @@ export default function App() {
       setHealthData(data);
     } catch (err: unknown) {
       setHealthData({
-        keyConfigured: false,
-        ltaAnswered: false,
+        status: 'error',
         weatherApiAnswered: false,
         error: err instanceof Error ? err.message : 'Failed to contact /api/health endpoint',
       });
@@ -148,46 +139,34 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* View Switcher Tabs & Quick Sectors */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-3 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-sm">
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 self-start md:self-auto text-xs">
-            <button
-              onClick={() => setActiveTab('combined')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${
-                activeTab === 'combined'
-                  ? 'bg-emerald-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid size={14} />
-              <span>Combined Commuter Hub</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('weather_map')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${
-                activeTab === 'weather_map'
-                  ? 'bg-emerald-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <CloudSun size={14} />
-              <span>Singapore Weather Map</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('bus_arrivals')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition ${
-                activeTab === 'bus_arrivals'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Bus size={14} />
-              <span>LTA Bus Arrivals</span>
-            </button>
+        {/* Quick Area Jump Chips & Diagnostics Action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-sm">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            <span className="text-slate-400 font-medium whitespace-nowrap flex items-center gap-1.5 mr-1">
+              <MapPin size={13} className="text-emerald-400" />
+              Quick Sectors:
+            </span>
+            {quickPicks.map((pick) => {
+              const isPicked = selectedArea.toLowerCase() === pick.toLowerCase();
+              return (
+                <button
+                  key={pick}
+                  onClick={() => handleSelectArea(pick)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs whitespace-nowrap transition-all ${
+                    isPicked
+                      ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
+                  }`}
+                >
+                  {pick}
+                  {pick === 'Ang Mo Kio' && (
+                    <span className="ml-1 text-[9px] opacity-75 font-normal">(Default)</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Diagnostic status trigger button */}
           <button
             onClick={() => {
               setShowHealthModal(true);
@@ -196,35 +175,8 @@ export default function App() {
             className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-slate-700 text-xs text-slate-300 transition"
           >
             <ShieldCheck size={14} className="text-emerald-400" />
-            <span>API Health Diagnostics</span>
+            <span>API Diagnostics</span>
           </button>
-        </div>
-
-        {/* Quick Area Jump Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-400 font-medium whitespace-nowrap flex items-center gap-1.5 mr-1">
-            <MapPin size={13} className="text-emerald-400" />
-            Quick Sectors:
-          </span>
-          {quickPicks.map((pick) => {
-            const isPicked = selectedArea.toLowerCase() === pick.toLowerCase();
-            return (
-              <button
-                key={pick}
-                onClick={() => handleSelectArea(pick)}
-                className={`px-3 py-1.5 rounded-xl border text-xs whitespace-nowrap transition-all ${
-                  isPicked
-                    ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
-                }`}
-              >
-                {pick}
-                {pick === 'Ang Mo Kio' && (
-                  <span className="ml-1 text-[9px] opacity-75 font-normal">(Default)</span>
-                )}
-              </button>
-            );
-          })}
         </div>
 
         {/* Error Banner if any */}
@@ -243,94 +195,50 @@ export default function App() {
           </div>
         )}
 
-        {/* Dynamic Panels based on Active Tab */}
-        {activeTab === 'combined' && (
-          <div className="space-y-6">
-            {/* Top Row: Map & Selected Weather Card */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="lg:col-span-7 xl:col-span-8">
-                <SingaporeMap
-                  areaMetadata={metadataList}
-                  forecasts={forecastsList}
-                  selectedArea={selectedArea}
-                  onSelectArea={handleSelectArea}
-                />
-              </div>
-
-              <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
-                <WeatherDetailCard
-                  areaName={selectedArea}
-                  forecast={currentForecast}
-                  metadata={currentMetadata}
-                  validPeriod={item?.valid_period}
-                  updateTimestamp={item?.update_timestamp || item?.timestamp}
-                  transitInfo={weatherData?.transit_info}
-                  source={weatherData?.source}
-                />
-              </div>
-            </div>
-
-            {/* Bottom Row: LTA Bus Arrivals Live Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-7 xl:col-span-8">
-                <BusArrivalPanel currentArea={selectedArea} />
-              </div>
-              <div className="lg:col-span-5 xl:col-span-4">
-                <AreaForecastGrid
-                  areaMetadata={metadataList}
-                  forecasts={forecastsList}
-                  selectedArea={selectedArea}
-                  onSelectArea={handleSelectArea}
-                />
-              </div>
-            </div>
+        {/* Top Section: Singapore Map & Selected Sector Detail Card */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-7 xl:col-span-8">
+            <SingaporeMap
+              areaMetadata={metadataList}
+              forecasts={forecastsList}
+              selectedArea={selectedArea}
+              onSelectArea={handleSelectArea}
+            />
           </div>
-        )}
 
-        {activeTab === 'weather_map' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="lg:col-span-7 xl:col-span-8">
-                <SingaporeMap
-                  areaMetadata={metadataList}
-                  forecasts={forecastsList}
-                  selectedArea={selectedArea}
-                  onSelectArea={handleSelectArea}
-                />
-              </div>
+          <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
+            <WeatherDetailCard
+              areaName={selectedArea}
+              forecast={currentForecast}
+              metadata={currentMetadata}
+              validPeriod={item?.valid_period}
+              updateTimestamp={item?.update_timestamp || item?.timestamp}
+              transitInfo={weatherData?.transit_info}
+              source={weatherData?.source}
+            />
+          </div>
+        </div>
 
-              <div className="lg:col-span-5 xl:col-span-4">
-                <WeatherDetailCard
-                  areaName={selectedArea}
-                  forecast={currentForecast}
-                  metadata={currentMetadata}
-                  validPeriod={item?.valid_period}
-                  updateTimestamp={item?.update_timestamp || item?.timestamp}
-                  transitInfo={weatherData?.transit_info}
-                  source={weatherData?.source}
-                />
-              </div>
-            </div>
-
-            <section className="space-y-3">
-              <h3 className="text-sm font-bold text-white tracking-wide">
-                All 47 Singapore Sectors Overview
+        {/* Bottom Section: All 47 Singapore Sectors Grid */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-wide">
+                All 47 Singapore Sectors
               </h3>
-              <AreaForecastGrid
-                areaMetadata={metadataList}
-                forecasts={forecastsList}
-                selectedArea={selectedArea}
-                onSelectArea={handleSelectArea}
-              />
-            </section>
+              <p className="text-xs text-slate-400">
+                Live 2-hour forecast by sector. Click any sector to focus on the map and view detailed forecasts.
+              </p>
+            </div>
           </div>
-        )}
 
-        {activeTab === 'bus_arrivals' && (
-          <div className="space-y-6 max-w-4xl mx-auto">
-            <BusArrivalPanel currentArea={selectedArea} />
-          </div>
-        )}
+          <AreaForecastGrid
+            areaMetadata={metadataList}
+            forecasts={forecastsList}
+            selectedArea={selectedArea}
+            onSelectArea={handleSelectArea}
+          />
+        </section>
       </main>
 
       {/* Health Diagnostics Modal */}
@@ -357,41 +265,7 @@ export default function App() {
               </div>
             ) : healthData ? (
               <div className="space-y-3 text-xs">
-                {/* LTA Status */}
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">LTA_ACCOUNT_KEY:</span>
-                    <div className="flex items-center gap-1.5 font-medium">
-                      {healthData.keyConfigured ? (
-                        <>
-                          <CheckCircle2 size={14} className="text-emerald-400" />
-                          <span className="text-emerald-300">Configured</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle size={14} className="text-amber-400" />
-                          <span className="text-amber-300">Not Set (Sample Preview Active)</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">LTA DataMall Upstream:</span>
-                    <div className="flex items-center gap-1.5 font-medium">
-                      {healthData.ltaAnswered ? (
-                        <>
-                          <CheckCircle2 size={14} className="text-emerald-400" />
-                          <span className="text-emerald-300">Responded ({healthData.upstreamStatus})</span>
-                        </>
-                      ) : (
-                        <span className="text-slate-500">Not queried without key</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Weather Status */}
+                {/* Weather Service Status */}
                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Singapore Weather API:</span>
@@ -402,16 +276,20 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Service Status:</span>
+                    <span className="text-emerald-400 font-mono font-semibold uppercase">{healthData.status || 'OK'}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
                     <span className="text-slate-400">Service Uptime:</span>
                     <span className="text-slate-300 font-mono">{healthData.uptimeSeconds || 0}s</span>
                   </div>
                 </div>
 
-                {healthData.error && (
-                  <p className="text-xs text-amber-300 bg-amber-950/40 p-3 rounded-xl border border-amber-900/60">
-                    {healthData.error}
-                  </p>
-                )}
+                <div className="flex items-start gap-2 text-[11px] text-slate-400 p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                  <Info size={14} className="shrink-0 text-emerald-400 mt-0.5" />
+                  <p>{healthData.message || 'All weather forecast services operational.'}</p>
+                </div>
               </div>
             ) : null}
 
@@ -440,9 +318,9 @@ export default function App() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-400">
             <div className="flex items-center gap-2">
               <CloudRain size={16} className="text-emerald-400" />
-              <span className="text-slate-200 font-medium">Singapore Weather & LTA Bus Hub</span>
+              <span className="text-slate-200 font-medium">Singapore Live Weather Panel</span>
               <span className="text-slate-600">|</span>
-              <span>2-Hour NEA Forecast & DataMall v3 Bus Arrival</span>
+              <span>2-Hour Real-time NEA Forecast</span>
             </div>
 
             <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
@@ -453,7 +331,7 @@ export default function App() {
           </div>
 
           <p className="text-[11px] leading-relaxed text-slate-400 border-t border-slate-800/80 pt-3">
-            Contains information from LTA DataMall Bus Arrival and National Environment Agency (NEA) 2-hour weather forecast accessed on {formattedDate}, which is made available under the terms of the Singapore Open Data Licence version 1.0{' '}
+            Contains information from National Environment Agency (NEA) 2-hour weather forecast accessed on {formattedDate}, which is made available under the terms of the Singapore Open Data Licence version 1.0{' '}
             <a
               href="https://data.gov.sg/open-data-licence"
               target="_blank"
@@ -462,7 +340,7 @@ export default function App() {
             >
               https://data.gov.sg/open-data-licence
             </a>
-            . This is an SMU course project and is not affiliated with or endorsed by the Land Transport Authority or NEA.
+            .
           </p>
         </div>
       </footer>

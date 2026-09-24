@@ -2,36 +2,13 @@
  * Health Check API Handler
  * Compatible with Vercel Serverless Functions and Express route handlers.
  * Reports:
- * 1. LTA DataMall configuration (LTA_ACCOUNT_KEY) and upstream status
- * 2. Singapore Real-time 2-Hour Weather Forecast API status
- * 3. Overall serverless & Express uptime
+ * 1. Singapore Real-time 2-Hour Weather Forecast API status
+ * 2. Service uptime and environment operational checks
  */
 export default async function handler(req, res) {
-  const key = process.env.LTA_ACCOUNT_KEY;
-  const keyConfigured = Boolean(key && typeof key === 'string' && key.trim() !== '');
-
   res.setHeader?.('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-  let ltaAnswered = false;
-  let ltaStatus = null;
   let weatherAnswered = false;
-
-  // Probe LTA DataMall if key configured
-  if (keyConfigured) {
-    try {
-      const ltaRes = await fetch('https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival?BusStopCode=04121', {
-        method: 'GET',
-        headers: {
-          AccountKey: key.trim(),
-          accept: 'application/json',
-        },
-      });
-      ltaAnswered = true;
-      ltaStatus = ltaRes.status;
-    } catch (_) {
-      ltaAnswered = false;
-    }
-  }
 
   // Probe Singapore Weather API
   try {
@@ -47,17 +24,11 @@ export default async function handler(req, res) {
 
   const payload = {
     status: 'ok',
-    service: 'singapore-weather-and-lta-bus-api',
+    service: 'singapore-weather-forecast-api',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime ? process.uptime() : 0),
-    // LTA fields expected by LTA Bus App health modal
-    keyConfigured,
-    ltaAnswered,
-    upstreamStatus: ltaStatus,
-    error: keyConfigured ? undefined : 'LTA_ACCOUNT_KEY is not set. Add it in Vercel or Secrets and redeploy.',
-    // Weather API fields
     weatherApiAnswered: weatherAnswered,
-    message: 'Singapore Live Weather & Transit API handlers active.'
+    message: 'Singapore Live Weather API services are healthy and operational.'
   };
 
   if (res.status && typeof res.status === 'function') {
